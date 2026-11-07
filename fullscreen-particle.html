@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Portrait</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Configuration
+        const PARTICLE_COUNT = 35000;
+        const PARTICLE_SIZE = 1.0;
+        const ANIMATION_SPEED = 0.05;
+        const REFERENCE_IMAGE = 'portrait.jpg';
+
+        let particles = [];
+        let isAnimating = true;
+
+        // Resize canvas to fill viewport
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle class
+        class Particle {
+            constructor(x, y, targetX, targetY, brightness) {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.brightness = brightness;
+                this.size = PARTICLE_SIZE * (0.7 + brightness * 0.6);
+                this.speed = ANIMATION_SPEED;
+            }
+
+            update() {
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                this.x += dx * this.speed;
+                this.y += dy * this.speed;
+            }
+
+            draw() {
+                const alpha = 0.4 + this.brightness * 0.6;
+                ctx.fillStyle = `rgba(230, 182, 255, ${alpha})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        // Load and process image
+        async function init() {
+            console.log('Initializing...');
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            img.onload = () => {
+                console.log('Image loaded:', img.width, 'x', img.height);
+                
+                // Scale to fit entire image within canvas (preserve aspect ratio)
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.92;
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                
+                console.log('Scale:', scale, 'Scaled:', scaledWidth, 'x', scaledHeight);
+                
+                // Center the image
+                const offsetX = (canvas.width - scaledWidth) / 2;
+                const offsetY = (canvas.height - scaledHeight) / 2;
+                
+                // Create temporary canvas to analyze image
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                
+                tempCtx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+                const imageData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                console.log('Image data obtained, generating particles...');
+                
+                // Generate particles with luminance-based density
+                particles = [];
+                
+                // Sample every pixel and create particles based on brightness
+                for (let y = 0; y < canvas.height; y++) {
+                    for (let x = 0; x < canvas.width; x++) {
+                        const idx = (y * canvas.width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const a = data[idx + 3];
+                        
+                        // Skip transparent pixels
+                        if (a < 30) continue;
+                        
+                        const brightness = (r + g + b) / (3 * 255);
+                        
+                        // Skip very dark areas
+                        if (brightness < 0.05) continue;
+                        
+                        // Probability based on brightness (brighter = more particles)
+                        const threshold = 0.95 - brightness * 0.5;
+                        if (Math.random() > threshold) {
+                            particles.push(new Particle(x, y, x, y, brightness));
+                        }
+                        
+                        if (particles.length >= PARTICLE_COUNT) break;
+                    }
+                    if (particles.length >= PARTICLE_COUNT) break;
+                }
+                
+                console.log('Generated', particles.length, 'particles');
+                
+                // Start animation
+                console.log('Starting animation...');
+                animate();
+            };
+            
+            img.onerror = () => {
+                console.error('Failed to load image');
+                // Fallback: create random particles
+                for (let i = 0; i < 10000; i++) {
+                    particles.push(new Particle(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        Math.random()
+                    ));
+                }
+                animate();
+            };
+            
+            console.log('Loading image:', REFERENCE_IMAGE);
+            img.src = REFERENCE_IMAGE;
+        }
+
+        // Animation loop
+        function animate() {
+            // Clear with black
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update and draw particles (batch fillRect for performance)
+            ctx.fillStyle = '#e6b6ff';
+            let drawnCount = 0;
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+                drawnCount++;
+            });
+            
+            if (drawnCount === 0) {
+                console.log('No particles to draw!');
+            }
+            
+            if (isAnimating) {
+                requestAnimationFrame(animate);
+            }
+        }
+
+        // Start when page loads
+        window.addEventListener('load', () => {
+            console.log('Page loaded, calling init...');
+            init();
+        });
+    </script>
+</body>
+</html>

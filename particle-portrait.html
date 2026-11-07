@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Particle Portrait</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #main-canvas {
+            background: #000;
+            border-radius: 8px;
+            box-shadow: 0 0 50px rgba(255, 105, 180, 0.3);
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 105, 180, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #ff69b4, #da70d6);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 4px 15px rgba(255, 105, 180, 0.4);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 105, 180, 0.6);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        #upload-btn {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+        }
+
+        #generate-btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+        }
+
+        #play-btn {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+        }
+
+        #reverse-btn {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        #replay-btn {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+        }
+
+        #loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff69b4;
+            font-size: 24px;
+            display: none;
+            z-index: 200;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(255, 105, 180, 0.3);
+            border-top-color: #ff69b4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 14px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            #controls {
+                bottom: 10px;
+                padding: 15px;
+                gap: 10px;
+            }
+
+            button {
+                padding: 10px 18px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Particle Portrait - Upload an image or use the default</div>
+    
+    <div id="canvas-container">
+        <canvas id="main-canvas"></canvas>
+    </div>
+
+    <div id="loading">
+        <div class="loading-spinner"></div>
+        <div>Processing...</div>
+    </div>
+
+    <div id="controls">
+        <input type="file" id="file-input" accept="image/*">
+        <button id="upload-btn">📁 Upload Image</button>
+        <button id="generate-btn">⚡ Generate</button>
+        <button id="play-btn" disabled>▶ Play</button>
+        <button id="reverse-btn" disabled>↺ Reverse</button>
+        <button id="replay-btn" disabled>↻ Replay</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('upload-btn');
+        const generateBtn = document.getElementById('generate-btn');
+        const playBtn = document.getElementById('play-btn');
+        const reverseBtn = document.getElementById('reverse-btn');
+        const replayBtn = document.getElementById('replay-btn');
+        const loading = document.getElementById('loading');
+
+        // Configuration
+        const PARTICLE_COUNT = 15000;
+        const PARTICLE_SIZE = 1.5;
+        const MOUSE_RADIUS = 80;
+        const MOUSE_FORCE = 3;
+        const RETURN_SPEED = 0.08;
+        const ANIMATION_SPEED = 0.04;
+
+        let particles = [];
+        let imageLoaded = false;
+        let isAnimating = false;
+        let animationDirection = 1; // 1 = to target, -1 = to scattered
+        let targetImage = null;
+        let imageData = null;
+
+        // Mouse position
+        let mouse = { x: -1000, y: -1000 };
+
+        // Default image
+        const DEFAULT_IMAGE_SRC = 'reference.jpg';
+
+        // Set canvas size
+        function resizeCanvas() {
+            const maxWidth = Math.min(window.innerWidth - 40, 800);
+            const maxHeight = Math.min(window.innerHeight - 150, 600);
+            
+            canvas.width = maxWidth;
+            canvas.height = maxHeight;
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle class
+        class Particle {
+            constructor(x, y, targetX, targetY, color) {
+                this.x = x;
+                this.y = y;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.color = color;
+                this.baseX = x;
+                this.baseY = y;
+                this.density = Math.random() * 30 + 1;
+                this.size = PARTICLE_SIZE * (Math.random() * 0.5 + 0.75);
+            }
+
+            update() {
+                // Mouse interaction
+                const dx = mouse.x - this.x;
+                const dy = mouse.y - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < MOUSE_RADIUS) {
+                    const force = (MOUSE_RADIUS - distance) / MOUSE_RADIUS;
+                    const angle = Math.atan2(dy, dx);
+                    this.x -= Math.cos(angle) * force * MOUSE_FORCE * this.density;
+                    this.y -= Math.sin(angle) * force * MOUSE_FORCE * this.density;
+                }
+
+                // Return to target position
+                if (animationDirection === 1) {
+                    this.x += (this.targetX - this.x) * RETURN_SPEED;
+                    this.y += (this.targetY - this.y) * RETURN_SPEED;
+                } else {
+                    this.x += (this.baseX - this.x) * RETURN_SPEED;
+                    this.y += (this.baseY - this.y) * RETURN_SPEED;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        // Load image
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        // Generate particles from image
+        async function generateParticles(image) {
+            loading.style.display = 'block';
+            
+            // Create temporary canvas to analyze image
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Scale image to fit canvas
+            const scale = Math.min(canvas.width / image.width, canvas.height / image.height);
+            const scaledWidth = image.width * scale;
+            const scaledHeight = image.height * scale;
+            
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            
+            // Center the image
+            const offsetX = (canvas.width - scaledWidth) / 2;
+            const offsetY = (canvas.height - scaledHeight) / 2;
+            
+            tempCtx.drawImage(image, offsetX, offsetY, scaledWidth, scaledHeight);
+            
+            const imgData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            
+            particles = [];
+            
+            // Sample pixels - use smaller step for more detail
+            const step = Math.ceil(Math.sqrt((canvas.width * canvas.height) / PARTICLE_COUNT * 0.8));
+            
+            for (let y = 0; y < canvas.height; y += step) {
+                for (let x = 0; x < canvas.width; x += step) {
+                    const index = (y * canvas.width + x) * 4;
+                    const r = data[index];
+                    const g = data[index + 1];
+                    const b = data[index + 2];
+                    const a = data[index + 3];
+                    
+                    // Skip only transparent pixels - keep all dark pixels for detail
+                    if (a < 30) continue;
+                    
+                    // Use exact image colors - white/light purple on black
+                    const brightness = (r + g + b) / 3;
+                    let color;
+                    
+                    if (brightness > 200) {
+                        // Pure white
+                        color = `rgba(255, 255, 255, ${0.8 + Math.random() * 0.2})`;
+                    } else if (brightness > 150) {
+                        // Light purple/white
+                        color = `rgba(${240 + Math.random() * 15}, ${230 + Math.random() * 25}, ${255}, ${0.7 + Math.random() * 0.3})`;
+                    } else if (brightness > 100) {
+                        // Light purple
+                        color = `rgba(${200 + Math.random() * 40}, ${180 + Math.random() * 50}, ${230 + Math.random() * 25}, ${0.6 + Math.random() * 0.4})`;
+                    } else if (brightness > 50) {
+                        // Medium purple
+                        color = `rgba(${150 + Math.random() * 50}, ${120 + Math.random() * 60}, ${200 + Math.random() * 55}, ${0.5 + Math.random() * 0.3})`;
+                    } else {
+                        // Dark purple - barely visible
+                        color = `rgba(${100 + Math.random() * 50}, ${80 + Math.random() * 40}, ${150 + Math.random() * 50}, ${0.3 + Math.random() * 0.3})`;
+                    }
+                    
+                    // Random starting position
+                    const startX = Math.random() * canvas.width;
+                    const startY = Math.random() * canvas.height;
+                    
+                    particles.push(new Particle(startX, startY, x, y, color));
+                }
+            }
+            
+            // Limit particle count
+            if (particles.length > PARTICLE_COUNT) {
+                particles = particles.slice(0, PARTICLE_COUNT);
+            }
+            
+            // Add more particles if needed
+            while (particles.length < PARTICLE_COUNT) {
+                const existing = particles[Math.floor(Math.random() * particles.length)];
+                const startX = Math.random() * canvas.width;
+                const startY = Math.random() * canvas.height;
+                particles.push(new Particle(startX, startY, existing.targetX, existing.targetY, existing.color));
+            }
+            
+            imageLoaded = true;
+            playBtn.disabled = false;
+            reverseBtn.disabled = false;
+            replayBtn.disabled = false;
+            
+            loading.style.display = 'none';
+            
+            // Draw initial scattered state
+            drawParticles();
+        }
+
+        // Draw all particles
+        function drawParticles() {
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Subtle glow effect
+            ctx.shadowBlur = 3;
+            ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+            
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+            });
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Animation loop
+        function animate() {
+            if (!isAnimating) return;
+            
+            drawParticles();
+            requestAnimationFrame(animate);
+        }
+
+        // Event listeners
+        uploadBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    loadImage(event.target.result).then(img => {
+                        targetImage = img;
+                        generateParticles(img);
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        generateBtn.addEventListener('click', async () => {
+            if (targetImage) {
+                await generateParticles(targetImage);
+            } else {
+                // Try to load default image
+                try {
+                    const img = await loadImage(DEFAULT_IMAGE_SRC);
+                    targetImage = img;
+                    await generateParticles(img);
+                } catch (err) {
+                    console.error('Could not load default image:', err);
+                    alert('Please upload an image first');
+                }
+            }
+        });
+
+        playBtn.addEventListener('click', () => {
+            animationDirection = 1;
+            isAnimating = true;
+            animate();
+        });
+
+        reverseBtn.addEventListener('click', () => {
+            animationDirection = -1;
+            isAnimating = true;
+            animate();
+        });
+
+        replayBtn.addEventListener('click', () => {
+            // Reset to scattered
+            particles.forEach(p => {
+                p.x = p.baseX;
+                p.y = p.baseY;
+            });
+            
+            animationDirection = 1;
+            isAnimating = true;
+            animate();
+        });
+
+        // Mouse interaction
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            mouse.x = e.clientX - rect.left;
+            mouse.y = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+
+        // Touch support
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            mouse.x = touch.clientX - rect.left;
+            mouse.y = touch.clientY - rect.top;
+        });
+
+        canvas.addEventListener('touchend', () => {
+            mouse.x = -1000;
+            mouse.y = -1000;
+        });
+
+        // Initial state - draw empty canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    </script>
+</body>
+</html>
