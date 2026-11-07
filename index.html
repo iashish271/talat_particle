@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>A Rose Written in Every Language</title>
+    <title>Particle Portrait</title>
     <style>
         * {
             margin: 0;
@@ -12,542 +12,187 @@
         }
 
         body {
-            background: #060208;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-family: Georgia, 'Times New Roman', Arial, serif;
+            background: #000;
             overflow: hidden;
-            position: relative;
+            width: 100vw;
+            height: 100vh;
         }
 
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        .text-item {
-            position: absolute;
-            font-weight: bold;
-            opacity: 0;
-            transform: translateY(-32px);
-            transition: opacity 0.6s ease, transform 0.6s ease;
-            text-shadow: 1px 2px 2px rgba(0, 0, 0, 0.8);
-            pointer-events: none;
-        }
-
-        .text-item.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .text-item.shimmer {
-            filter: brightness(1.3);
-        }
-
-        #replay-btn {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 30px;
-            background: linear-gradient(135deg, #dc143c, #8b0000);
-            color: white;
-            border: none;
-            border-radius: 25px;
-            font-size: 14px;
-            cursor: pointer;
-            z-index: 100;
-            opacity: 0;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(220, 20, 60, 0.5);
-            font-family: Georgia, serif;
-        }
-
-        #replay-btn:hover {
-            transform: translateX(-50%) scale(1.1);
-            box-shadow: 0 0 30px rgba(220, 20, 60, 0.8);
-        }
-
-        #replay-btn.visible {
-            opacity: 1;
-        }
-
-        @media (max-width: 600px) {
-            #canvas {
-                transform: scale(0.6);
-            }
+        canvas {
+            display: block;
+            background: #000;
         }
     </style>
 </head>
 <body>
-    <div id="canvas"></div>
-    <button id="replay-btn">↻ Replay</button>
+    <canvas id="canvas"></canvas>
 
     <script>
-        const PHRASES = [
-            "I LOVE YOU", "I love you", "Te amo", "Ti amo", "Je t'aime",
-            "Ich liebe dich", "Eu te amo", "Seni seviyorum", "Я тебя люблю",
-            "사랑해", "愛してる", "我爱你", "मैं तुमसे प्यार करती हूँ",
-            "मैं तुमसे प्यार करता हूँ", "Σ' αγαπώ", "Ik hou van jou",
-            "Jag älskar dig", "Kocham cię", "ฉันรักคุณ", "Anh yêu em",
-            "Aku cinta kamu", "Mahal kita", "אני אוהבת אותך", "أحبك",
-            "నేను నిన్ను ప్�్రేమిస్తున్నాను", "நான் உன்னை காதலிக்கிறேன்",
-            "আমি তোমাকে ভালোবাসি", "Volim te", "Te iubesc", "Ljubim te",
-            "Nakupenda", "Я тебе кохаю", "Miluji tě", "Szeretlek",
-            "Rakastan sinua", "Jeg elsker dig"
-        ];
-
-        const ACCENTS = [
-            "LOVE", "TE AMO", "AMOUR", "TI AMO", "I LOVE YOU", "AMOR",
-            "愛してる", "사랑해", "我爱你", "LOVE YOU", "JE T'AIME",
-            "SZERETLEK", "NAKUPENDA"
-        ];
-
-        const SHORT_PHRASES = [
-            "Te amo", "Ti amo", "AMOR", "LOVE", "愛してる", "사랑해", "我爱你",
-            "Amour", "I love you", "Mahal kita", "Te iubesc", "Volim te",
-            "Szeretlek", "Miluji tě", "Nakupenda"
-        ];
-
-        const HEAD_WORDS = [...PHRASES,
-            "LOVE", "LOVE", "LOVE YOU", "AMOR", "AMOR", "AMOUR", "AMOUR",
-            "AMORE", "LIEBE", "TE AMO", "TE AMO", "TI AMO", "TI AMO",
-            "TE QUIERO", "TE QUIERO", "JE T'AIME", "I LOVE YOU", "I LOVE YOU",
-            "愛", "愛してる", "愛してる", "사랑", "사랑해", "사랑해", "我爱你",
-            "Mahal kita", "รักคุณ", "ANH YÊU EM", "तुमसे प्यार है",
-            "నిన్ను ప్రేమిస్తున్నా", "உன்னை காதலிக்கிறேன்", "ভালোবাসি",
-            "أحبك", "LOVE", "AMOR", "AMOUR", "Nakupenda", "Szeretlek"
-        ];
-
-        const SEED = 17;
-        let rng = seededRandom(SEED);
-
-        function seededRandom(seed) {
-            let state = seed;
-            return function() {
-                state = (state * 1103515245 + 12345) & 0x7fffffff;
-                return state / 0x7fffffff;
-            };
-        }
-
-        function rngInt(min, max) {
-            return Math.floor(rng() * (max - min + 1)) + min;
-        }
-
-        function rngChoice(arr) {
-            return arr[rngInt(0, arr.length - 1)];
-        }
-
-        function rngChoices(arr, weights, count) {
-            const result = [];
-            const totalWeight = weights.reduce((a, b) => a + b, 0);
-            for (let i = 0; i < count; i++) {
-                let r = rng() * totalWeight;
-                for (let j = 0; j < arr.length; j++) {
-                    r -= weights[j];
-                    if (r <= 0) {
-                        result.push(arr[j]);
-                        break;
-                    }
-                }
-            }
-            return result;
-        }
-
-        function roseColor(x, y, size, edge = false) {
-            const dx = (x - 400) / 210;
-            const dy = (y - 300) / 220;
-            const rad = Math.sqrt(dx * dx + dy * dy);
-            
-            let palette;
-            if (rad > 0.82) {
-                palette = ["#8f0b2b", "#ae1238", "#c41d48", "#d52b53"];
-            } else if (rad > 0.48) {
-                palette = ["#b9143d", "#d21e49", "#e33b60", "#f04e73"];
-            } else {
-                palette = ["#c51b49", "#e83c68", "#f16b8b", "#ff91a9"];
-            }
-            
-            if (edge) {
-                palette = palette.concat(["#f5a0b3", "#ef6488"]);
-            }
-            if (size >= 14) {
-                palette = palette.concat(["#ff9ab1", "#ffd0dc"]);
-            }
-            
-            return rngChoice(palette);
-        }
-
-        function greenColor(x, y, size, edge = false) {
-            let palette = ["#3e8034", "#559c3c", "#72b84b", "#91cf62", "#b1e184"];
-            if (size >= 9) {
-                palette = palette.concat(["#a7d486", "#c0e19a"]);
-            }
-            return rngChoice(palette);
-        }
-
-        const HEAD_SIZES = [7, 8, 9, 10, 11, 12, 13, 14];
-        const HEAD_WEIGHTS = [2, 4, 5, 5, 4, 2, 1, 0.5];
-
-        let phraseCycles = {};
-
-        function phraseFromPool(poolName, size) {
-            let pool;
-            if (size >= 14) {
-                pool = ACCENTS;
-            } else if (poolName !== "head") {
-                pool = SHORT_PHRASES;
-            } else {
-                pool = HEAD_WORDS;
-            }
-            
-            const key = poolName + "_" + (size >= 14 ? "accent" : "normal");
-            if (!phraseCycles[key] || phraseCycles[key].items.length === 0) {
-                phraseCycles[key] = {
-                    items: [...pool].sort(() => rng() - 0.5),
-                    index: 0
-                };
-            }
-            
-            const state = phraseCycles[key];
-            const phrase = state.items[state.index];
-            state.index++;
-            if (state.index >= state.items.length) {
-                state.items = [];
-            }
-            return phrase;
-        }
-
-        function sizeFor(poolName) {
-            if (poolName === "head") {
-                return rngChoices(HEAD_SIZES, HEAD_WEIGHTS, 1)[0];
-            }
-            return rngChoice(poolName === "stem" ? [6, 7, 8] : [7, 8, 9, 10]);
-        }
-
-        function colorFor(x, y, size, kind, edge = false) {
-            if (kind === "head") {
-                return roseColor(x, y, size, edge);
-            }
-            return greenColor(x, y, size, edge);
-        }
-
-        // Rose shape definitions
-        function ellipsePoly(cx, cy, rx, ry, points = 160) {
-            const result = [];
-            for (let i = 0; i < points; i++) {
-                const angle = (2 * Math.PI * i) / points;
-                result.push([
-                    cx + rx * Math.cos(angle),
-                    cy + ry * Math.sin(angle)
-                ]);
-            }
-            return result;
-        }
-
-        const HEAD_SHAPES = [
-            ellipsePoly(400, 180, 145, 90),
-            ellipsePoly(330, 180, 120, 83),
-            ellipsePoly(470, 180, 120, 83),
-            ellipsePoly(275, 260, 98, 112),
-            ellipsePoly(525, 260, 98, 112),
-            ellipsePoly(338, 325, 118, 126),
-            ellipsePoly(462, 325, 118, 126),
-            [[230, 330], [290, 365], [348, 414], [400, 532],
-             [452, 414], [510, 365], [570, 330], [522, 452],
-             [400, 542], [278, 452]]
-        ];
-
-        const STEM = [[378, 493], [422, 493], [427, 752], [408, 772],
-                      [390, 760], [374, 600]];
-
-        const LEFT_LEAF = [[395, 594], [359, 554], [304, 535], [244, 541],
-                          [215, 562], [253, 609], [321, 631], [374, 617]];
-
-        const RIGHT_LEAF = [[406, 619], [442, 581], [491, 561], [553, 578],
-                           [578, 600], [535, 640], [476, 660], [425, 649]];
-
-        function polygonSpans(poly, y) {
-            const xs = [];
-            for (let i = 0; i < poly.length; i++) {
-                const [x1, y1] = poly[i];
-                const [x2, y2] = poly[(i + 1) % poly.length];
-                if ((y1 <= y && y < y2) || (y2 <= y && y < y1)) {
-                    if (y2 !== y1) {
-                        xs.push(x1 + (y - y1) * (x2 - x1) / (y2 - y1));
-                    }
-                }
-            }
-            xs.sort((a, b) => a - b);
-            const result = [];
-            for (let i = 0; i < xs.length - 1; i += 2) {
-                result.push([xs[i], xs[i + 1]]);
-            }
-            return result;
-        }
-
-        function mergeSpans(spans) {
-            if (!spans || spans.length === 0) return [];
-            spans.sort((a, b) => a[0] - b[0]);
-            const merged = [[spans[0][0], spans[0][1]]];
-            for (let i = 1; i < spans.length; i++) {
-                const [lo, hi] = spans[i];
-                if (lo <= merged[merged.length - 1][1] + 1) {
-                    merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], hi);
-                } else {
-                    merged.push([lo, hi]);
-                }
-            }
-            return merged;
-        }
-
-        function shapeSpans(polygons, y) {
-            const raw = [];
-            for (const poly of polygons) {
-                raw.push(...polygonSpans(poly, y));
-            }
-            return mergeSpans(raw);
-        }
-
-        function intersectSpans(aSpans, bSpans, minimum = 15) {
-            const out = [];
-            for (const a of aSpans) {
-                for (const b of bSpans) {
-                    const lo = Math.max(a[0], b[0]);
-                    const hi = Math.min(a[1], b[1]);
-                    if (hi - lo >= minimum) {
-                        out.push([lo, hi]);
-                    }
-                }
-            }
-            return mergeSpans(out);
-        }
-
-        function buildRegion(polygons, yStart, yEnd, rowH, kind) {
-            const placed = [];
-            const half = rowH / 2;
-            let y = yStart + half;
-
-            while (y < yEnd - half) {
-                const top = shapeSpans(polygons, y - half + 1);
-                const bottom = shapeSpans(polygons, y + half - 1);
-                const row = intersectSpans(top, bottom, kind === "head" ? 19 : 16);
-
-                for (const [lo, hi] of row) {
-                    const margin = kind === "head" ? 3 : 1;
-                    const adjustedLo = lo + margin;
-                    const adjustedHi = hi - margin;
-                    const available = adjustedHi - adjustedLo;
-                    if (available < 18) continue;
-
-                    const line = [];
-                    let cur = adjustedLo + rng() * Math.min(3, Math.max(1, available * 0.02));
-                    const gap = kind === "head" ? 3 : 1;
-
-                    while (cur < adjustedHi - 15) {
-                        const remaining = adjustedHi - cur;
-                        const targetWidth = Math.min(74, Math.max(19, remaining * 0.22));
-                        const tries = kind === "head" ? 45 : 55;
-                        const candidates = [];
-
-                        for (let i = 0; i < tries; i++) {
-                            const size = sizeFor(kind);
-                            const text = phraseFromPool(kind, size);
-                            const fontSize = size;
-                            const width = estimateWidth(text, fontSize);
-                            if (width <= remaining && width >= Math.min(18, remaining * 0.20)) {
-                                const score = Math.abs(width - targetWidth) + rng() * 13;
-                                candidates.push({ score, text, size, width });
-                            }
-                        }
-
-                        if (candidates.length === 0) break;
-                        candidates.sort((a, b) => a.score - b.score);
-                        const pick = rngChoice(candidates.slice(0, Math.min(4, candidates.length)));
-                        line.push({
-                            x: cur + pick.width / 2,
-                            y: y,
-                            text: pick.text,
-                            size: pick.size,
-                            width: pick.width,
-                            kind: kind
-                        });
-                        cur += pick.width + gap;
-                    }
-
-                    if (line.length === 0) continue;
-
-                    const used = line.reduce((sum, item) => sum + item.width, 0) + 
-                                 Math.max(0, line.length - 1) * gap;
-                    const slack = Math.max(0, available - used);
-                    const extra = line.length > 1 ? slack / (line.length - 1) : 0;
-
-                    for (let i = 0; i < line.length; i++) {
-                        line[i].x += extra * i;
-                        line[i].edge = (i === 0 || i === line.length - 1);
-                        line[i].color = colorFor(line[i].x, line[i].y, line[i].size, kind, line[i].edge);
-                        placed.push(line[i]);
-                    }
-                }
-                y += rowH;
-            }
-            return placed;
-        }
-
-        function estimateWidth(text, size) {
-            // Rough estimate: ~0.6 * character count * size
-            return text.length * size * 0.6;
-        }
-
-        // Build the rose
-        const headRowH = 14;
-        const leafRowH = 11;
-        const stemRowH = 10;
-
-        let placed = [];
-        placed = placed.concat(buildRegion(HEAD_SHAPES, 88, 540, headRowH, "head"));
-        placed = placed.concat(buildRegion([LEFT_LEAF], 543, 618, leafRowH, "leaf"));
-        placed = placed.concat(buildRegion([RIGHT_LEAF], 575, 651, leafRowH, "leaf"));
-        placed = placed.concat(buildRegion([STEM], 492, 773, stemRowH, "stem"));
-
-        // Sort for animation
-        const outer = placed.filter(p => p.edge);
-        const inner = placed.filter(p => !p.edge);
-        outer.sort((a, b) => {
-            const angleA = Math.atan2(a.y - 300, a.x - 400);
-            const angleB = Math.atan2(b.y - 300, b.x - 400);
-            return (angleA % (2 * Math.PI)) - (angleB % (2 * Math.PI));
-        });
-        inner.sort(() => rng() - 0.5);
-        const ORDER = [...outer, ...inner];
-
         const canvas = document.getElementById('canvas');
-        const ANIM_DURATION = 38;
-        const DURATION = 10;
-        const TICK = 16;
-        let activeItems = [];
-        let allMainItems = [];
-        let spawning = true;
-        let itemIndex = 0;
-        let acc = 0;
-        const rate = ORDER.length / Math.max(1, (DURATION * 1000 / TICK));
+        const ctx = canvas.getContext('2d');
 
-        function spawn(item) {
-            const div = document.createElement('div');
-            div.className = 'text-item';
-            div.textContent = item.text;
-            div.style.left = item.x + 'px';
-            div.style.top = item.y + 'px';
-            div.style.fontSize = item.size + 'px';
-            div.style.color = item.color;
-            canvas.appendChild(div);
-            
-            item.element = div;
-            item.frame = 0;
-            item.dx = rng() * 12 - 6;
-            activeItems.push(item);
-            allMainItems.push(item);
+        // Configuration
+        const PARTICLE_COUNT = 35000;
+        const PARTICLE_SIZE = 1.0;
+        const ANIMATION_SPEED = 0.05;
+        const REFERENCE_IMAGE = 'portrait.jpg';
+
+        let particles = [];
+        let isAnimating = true;
+
+        // Resize canvas to fill viewport
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
 
-        function animate(item) {
-            item.frame++;
-            const u = Math.min(1, item.frame / ANIM_DURATION);
-            const eased = 1 - Math.pow(1 - u, 3);
-            
-            const px = item.x + item.dx * (1 - eased);
-            const py = item.y - 32 * (1 - eased);
-            
-            item.element.style.left = px + 'px';
-            item.element.style.top = py + 'px';
-            item.element.style.opacity = eased;
-            
-            if (u >= 1) {
-                item.element.style.left = item.x + 'px';
-                item.element.style.top = item.y + 'px';
-                item.element.style.opacity = 1;
-                return false;
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Particle class
+        class Particle {
+            constructor(x, y, targetX, targetY, brightness) {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                this.brightness = brightness;
+                this.size = PARTICLE_SIZE * (0.7 + brightness * 0.6);
+                this.speed = ANIMATION_SPEED;
             }
-            return true;
-        }
 
-        function shimmer() {
-            if (allMainItems.length > 0) {
-                const item = rngChoice(allMainItems);
-                item.element.classList.add('shimmer');
-                setTimeout(() => {
-                    item.element.classList.remove('shimmer');
-                }, 210);
+            update() {
+                const dx = this.targetX - this.x;
+                const dy = this.targetY - this.y;
+                this.x += dx * this.speed;
+                this.y += dy * this.speed;
             }
-            setTimeout(shimmer, 145);
+
+            draw() {
+                const alpha = 0.4 + this.brightness * 0.6;
+                ctx.fillStyle = `rgba(230, 182, 255, ${alpha})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
         }
 
-        function step() {
-            if (spawning) {
-                acc += rate;
-                while (acc >= 1) {
-                    acc -= 1;
-                    if (itemIndex < ORDER.length) {
-                        spawn(ORDER[itemIndex]);
-                        itemIndex++;
-                    } else {
-                        spawning = false;
-                        break;
+        // Load and process image
+        async function init() {
+            console.log('Initializing...');
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            
+            img.onload = () => {
+                console.log('Image loaded:', img.width, 'x', img.height);
+                
+                // Scale to fit entire image within canvas (preserve aspect ratio)
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.92;
+                const scaledWidth = img.width * scale;
+                const scaledHeight = img.height * scale;
+                
+                console.log('Scale:', scale, 'Scaled:', scaledWidth, 'x', scaledHeight);
+                
+                // Center the image
+                const offsetX = (canvas.width - scaledWidth) / 2;
+                const offsetY = (canvas.height - scaledHeight) / 2;
+                
+                // Create temporary canvas to analyze image
+                const tempCanvas = document.createElement('canvas');
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                
+                tempCtx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+                const imageData = tempCtx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                console.log('Image data obtained, generating particles...');
+                
+                // Generate particles with luminance-based density
+                particles = [];
+                
+                // Sample every pixel and create particles based on brightness
+                for (let y = 0; y < canvas.height; y++) {
+                    for (let x = 0; x < canvas.width; x++) {
+                        const idx = (y * canvas.width + x) * 4;
+                        const r = data[idx];
+                        const g = data[idx + 1];
+                        const b = data[idx + 2];
+                        const a = data[idx + 3];
+                        
+                        // Skip transparent pixels
+                        if (a < 30) continue;
+                        
+                        const brightness = (r + g + b) / (3 * 255);
+                        
+                        // Skip very dark areas
+                        if (brightness < 0.05) continue;
+                        
+                        // Probability based on brightness (brighter = more particles)
+                        const threshold = 0.95 - brightness * 0.5;
+                        if (Math.random() > threshold) {
+                            particles.push(new Particle(x, y, x, y, brightness));
+                        }
+                        
+                        if (particles.length >= PARTICLE_COUNT) break;
                     }
+                    if (particles.length >= PARTICLE_COUNT) break;
                 }
-            }
+                
+                console.log('Generated', particles.length, 'particles');
+                
+                // Start animation
+                console.log('Starting animation...');
+                animate();
+            };
             
-            activeItems = activeItems.filter(item => animate(item));
+            img.onerror = () => {
+                console.error('Failed to load image');
+                // Fallback: create random particles
+                for (let i = 0; i < 10000; i++) {
+                    particles.push(new Particle(
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        Math.random() * canvas.width,
+                        Math.random() * canvas.height,
+                        Math.random()
+                    ));
+                }
+                animate();
+            };
             
-            if (!spawning && activeItems.length === 0) {
-                shimmer();
-                document.getElementById('replay-btn').classList.add('visible');
-                return;
-            }
-            
-            setTimeout(step, TICK);
+            console.log('Loading image:', REFERENCE_IMAGE);
+            img.src = REFERENCE_IMAGE;
         }
 
-        function reset() {
-            canvas.innerHTML = '';
-            activeItems = [];
-            allMainItems = [];
-            spawning = true;
-            itemIndex = 0;
-            acc = 0;
-            rng = seededRandom(SEED);
-            phraseCycles = {};
-            document.getElementById('replay-btn').classList.remove('visible');
+        // Animation loop
+        function animate() {
+            // Clear with black
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Rebuild with new random seed variations
-            placed = [];
-            placed = placed.concat(buildRegion(HEAD_SHAPES, 88, 540, headRowH, "head"));
-            placed = placed.concat(buildRegion([LEFT_LEAF], 543, 618, leafRowH, "leaf"));
-            placed = placed.concat(buildRegion([RIGHT_LEAF], 575, 651, leafRowH, "leaf"));
-            placed = placed.concat(buildRegion([STEM], 492, 773, stemRowH, "stem"));
-            
-            const outer = placed.filter(p => p.edge);
-            const inner = placed.filter(p => !p.edge);
-            outer.sort((a, b) => {
-                const angleA = Math.atan2(a.y - 300, a.x - 400);
-                const angleB = Math.atan2(b.y - 300, b.x - 400);
-                return (angleA % (2 * Math.PI)) - (angleB % (2 * Math.PI));
+            // Update and draw particles
+            ctx.fillStyle = '#e6b6ff';
+            let drawnCount = 0;
+            particles.forEach(particle => {
+                particle.update();
+                particle.draw();
+                drawnCount++;
             });
-            inner.sort(() => rng() - 0.5);
-            ORDER.length = 0;
-            ORDER.push(...outer, ...inner);
             
-            setTimeout(step, 200);
+            if (drawnCount === 0) {
+                console.log('No particles to draw!');
+            }
+            
+            if (isAnimating) {
+                requestAnimationFrame(animate);
+            }
         }
 
-        document.getElementById('replay-btn').addEventListener('click', reset);
-        
-        // Start animation
-        setTimeout(step, 200);
+        // Start when page loads
+        window.addEventListener('load', () => {
+            console.log('Page loaded, calling init...');
+            init();
+        });
     </script>
 </body>
 </html>
